@@ -58,7 +58,7 @@ jobs:
       
       - name: 📦 Install frontend dependencies
         working-directory: ./client
-        run: npm ci
+        run: npm install
       
       - name: 🧪 Run frontend tests
         working-directory: ./client
