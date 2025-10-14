@@ -1,106 +1,71 @@
-name: CI/CD Pipeline HOME App
+name: 🧪 Tests CI/CD HOME
 
 on:
   push:
-    branches: [develop, main]
+    branches: [main, develop]
   pull_request:
-    branches: [develop, main]
+    branches: [main, develop]
 
 jobs:
-  # ========================================
-  # JOB 1: TESTS BACKEND
-  # ========================================
   test-backend:
-    name: 🧪 Tests Backend
+    name: 🔧 Backend Tests
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout código
+      - name: 📥 Checkout code
         uses: actions/checkout@v3
       
-      - name: ⚙️ Configurar Node.js
+      - name: ⚙️ Setup Node.js 18
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
       
-      - name: 📦 Instalar dependencias
+      - name: 📦 Install backend dependencies
         working-directory: ./server
-        run: npm install
+        run: npm ci
       
-      - name: 🧪 Ejecutar tests
+      - name: 🧪 Run backend tests
         working-directory: ./server
-        run: npm test
         env:
-          MONGODB_URI_TEST: ${{ secrets.MONGODB_URI_TEST }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           NODE_ENV: test
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: npm test
+      
+      - name: 📊 Upload backend coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./server/coverage/lcov.info
+          flags: backend
+          name: backend-coverage
 
-  # ========================================
-  # JOB 2: TESTS FRONTEND
-  # ========================================
   test-frontend:
-    name: 🎨 Tests Frontend
+    name: 🎨 Frontend Tests
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout código
+      - name: 📥 Checkout code
         uses: actions/checkout@v3
       
-      - name: ⚙️ Configurar Node.js
+      - name: ⚙️ Setup Node.js 18
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
       
-      - name: 📦 Instalar dependencias
+      - name: 📦 Install frontend dependencies
         working-directory: ./client
-        run: npm install
+        run: npm ci
       
-      - name: 🧪 Ejecutar tests
+      - name: 🧪 Run frontend tests
         working-directory: ./client
-        run: npm test -- --coverage --watchAll=false --passWithNoTests
-        env:
-          CI: true
+        run: npm run test:ci
       
-      - name: 🏗️ Build
-        working-directory: ./client
-        run: npm run build
-
-  # ========================================
-  # JOB 3: LINTING
-  # ========================================
-  lint:
-    name: 🔍 Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - uses: actions/setup-node@v3
+      - name: 📊 Upload frontend coverage
+        uses: codecov/codecov-action@v3
         with:
-          node-version: '18'
-      
-      - name: Verificar código
-        run: |
-          echo "✅ Linting completado"
-          cd server && npm ci || true
-          cd ../client && npm ci || true
-
-  # ========================================
-  # JOB 4: REPORTE
-  # ========================================
-  report:
-    name: 📊 Reporte
-    needs: [test-backend, test-frontend, lint]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: 📊 Resumen
-        run: |
-          echo "================================"
-          echo "✅ Pipeline ejecutado"
-          echo "================================"
+          files: ./client/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
