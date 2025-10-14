@@ -1,14 +1,17 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
+  // En ambiente test, no conectar aquí (se conecta en los tests)
+  if (process.env.NODE_ENV === 'test') {
+    console.log('⚠️ Modo test: MongoDB se conectará desde los tests');
+    return;
+  }
+
   try {
-    // Usar MONGODB_URI_TEST si estamos en ambiente test
-    const uri = process.env.NODE_ENV === 'test' 
-      ? process.env.MONGODB_URI_TEST 
-      : process.env.MONGODB_URI;
+    const uri = process.env.MONGODB_URI;
 
     if (!uri) {
-      throw new Error('MongoDB URI no está configurada');
+      throw new Error('MONGODB_URI no está configurada en variables de entorno');
     }
 
     const conn = await mongoose.connect(uri, {
@@ -19,10 +22,7 @@ const connectDB = async () => {
     console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
   } catch (error) {
     console.error(`❌ Error de conexión: ${error.message}`);
-    // No hacer exit en tests
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(1);
-    }
+    process.exit(1);
   }
 };
 

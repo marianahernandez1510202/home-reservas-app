@@ -67,14 +67,18 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`📝 Ambiente: ${process.env.NODE_ENV}`);
-});
+// Solo iniciar servidor si NO estamos en ambiente test
+if (process.env.NODE_ENV !== 'test') {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`📝 Ambiente: ${process.env.NODE_ENV}`);
+  });
 
-process.on('unhandledRejection', (err) => {
-  console.log(`❌ Error: ${err.message}`);
-  server.close(() => process.exit(1));
-});
+  // Manejo de promesas no capturadas
+  process.on('unhandledRejection', (err) => {
+    console.log(`❌ Error: ${err.message}`);
+    server.close(() => process.exit(1));
+  });
+}
 
 module.exports = app;
