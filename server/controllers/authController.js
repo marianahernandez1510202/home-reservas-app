@@ -1,10 +1,18 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
-// Generar token JWT
+// Generar token JWT con validación
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE
+  const secret = process.env.JWT_SECRET;
+  const expire = process.env.JWT_EXPIRE || '24h';
+
+  if (!secret) {
+    throw new Error('JWT_SECRET no está configurado en las variables de entorno');
+  }
+
+  console.log('✅ Generando token con expire:', expire);
+  return jwt.sign({ id }, secret, {
+    expiresIn: expire
   });
 };
 
@@ -13,6 +21,12 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
+    // 🔍 DEBUG LOGS
+    console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
+    console.log('🔍 JWT_SECRET existe?', !!process.env.JWT_SECRET);
+    console.log('🔍 JWT_SECRET length:', process.env.JWT_SECRET?.length);
+    console.log('🔍 JWT_EXPIRE:', process.env.JWT_EXPIRE);
+
     const { name, email, password, phone, role } = req.body;
 
     // Verificar si el usuario ya existe
@@ -33,8 +47,11 @@ exports.register = async (req, res) => {
       role: role || 'guest'
     });
 
+    console.log('✅ Usuario creado:', user._id);
+
     // Generar token
     const token = generateToken(user._id);
+    console.log('✅ Token generado exitosamente');
 
     res.status(201).json({
       success: true,
@@ -47,6 +64,7 @@ exports.register = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Error en register:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
