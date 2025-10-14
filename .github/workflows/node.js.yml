@@ -27,7 +27,7 @@ jobs:
       
       - name: 📦 Instalar dependencias
         working-directory: ./server
-        run: npm ci
+        run: npm install
       
       - name: 🧪 Ejecutar tests
         working-directory: ./server
@@ -57,7 +57,7 @@ jobs:
       
       - name: 📦 Instalar dependencias
         working-directory: ./client
-        run: npm ci
+        run: npm install
       
       - name: 🧪 Ejecutar tests
         working-directory: ./client
