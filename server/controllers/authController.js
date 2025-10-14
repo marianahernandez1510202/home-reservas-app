@@ -2,15 +2,27 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
 // Generar token JWT con validación
+// Generar token JWT con validación
 const generateToken = (id) => {
   const secret = process.env.JWT_SECRET;
-  const expire = process.env.JWT_EXPIRE || '24h';
+  let expire = process.env.JWT_EXPIRE;
 
   if (!secret) {
     throw new Error('JWT_SECRET no está configurado en las variables de entorno');
   }
 
+  // Limpiar y validar expire
+  if (typeof expire === 'string') {
+    expire = expire.trim();
+    if (expire === '' || expire.includes('\n') || expire.includes('\r')) {
+      expire = '24h';
+    }
+  } else {
+    expire = '24h';
+  }
+  
   console.log('✅ Generando token con expire:', expire);
+  
   return jwt.sign({ id }, secret, {
     expiresIn: expire
   });
