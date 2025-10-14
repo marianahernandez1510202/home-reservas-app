@@ -58,7 +58,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Manejo de rutas no encontradas
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -73,7 +72,6 @@ const server = app.listen(PORT, () => {
   console.log(`📝 Ambiente: ${process.env.NODE_ENV}`);
 });
 
-// Manejo de promesas no capturadas
 process.on('unhandledRejection', (err) => {
   console.log(`❌ Error: ${err.message}`);
   server.close(() => process.exit(1));
