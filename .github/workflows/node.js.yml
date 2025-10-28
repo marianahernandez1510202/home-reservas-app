@@ -255,6 +255,15 @@ jobs:
           curl -v http://localhost:5000/ || (echo "❌ Server failed to start" && cat server/logs.txt && exit 1)
           echo "✅ Server is responding correctly"
       
+      - name: 🌱 Seed database with test data
+        working-directory: ./server
+        env:
+          MONGODB_URI: mongodb://localhost:27017/home_db_test
+        run: |
+          echo "📝 Seeding database with test properties..."
+          node scripts/seed-test-data.js
+          echo "✅ Database seeded successfully"
+      
       - name: 📦 Install K6
         run: |
           sudo gpg -k
