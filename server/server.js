@@ -16,12 +16,17 @@ const app = express();
 // Middleware de seguridad
 app.use(helmet());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100 // límite de 100 requests por IP
-});
-app.use('/api', limiter);
+// Rate limiting - SOLO en producción, NO en test/development
+if (process.env.NODE_ENV === 'production') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100 // límite de 100 requests por IP
+  });
+  app.use('/api', limiter);
+  console.log('🔒 Rate limiting enabled');
+} else {
+  console.log('⚠️  Rate limiting disabled (not production)');
+}
 
 // CORS
 app.use(cors({
