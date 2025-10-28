@@ -1,10 +1,11 @@
-name: 🧪 Tests CI/CD HOME
+name: 🧪 Tests CI/CD HOME with K6
 
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:  # Permite ejecución manual
 
 jobs:
   test-backend:
@@ -188,3 +189,199 @@ jobs:
           files: ./client/coverage/lcov.info
           flags: frontend
           name: frontend-coverage
+
+  load-testing:
+    name: 🚀 K6 Load Testing
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    
+    # Servicios adicionales que el job necesita
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: ⚙️ Setup Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: 📦 Install backend dependencies
+        working-directory: ./server
+        run: npm install
+      
+      - name: 🚀 Start backend server
+        working-directory: ./server
+        env:
+          NODE_ENV: development
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRE: ${{ secrets.JWT_EXPIRE }}
+          PORT: 5000
+          MONGODB_URI: mongodb://localhost:27017/home_db_test
+          FRONTEND_URL: http://localhost:3000
+        run: |
+          npm start &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "Server started with PID: $SERVER_PID"
+          
+          # Esperar hasta 30 segundos a que el servidor esté listo
+          for i in {1..30}; do
+            if curl -f http://localhost:5000/ 2>/dev/null; then
+              echo "✅ Server is ready!"
+              break
+            fi
+            echo "⏳ Waiting for server... ($i/30)"
+            sleep 1
+          done
+      
+      - name: 🔍 Verify server is running
+        run: |
+          echo "Testing server health..."
+          curl -v http://localhost:5000/ || (echo "❌ Server failed to start" && cat server/logs.txt && exit 1)
+          echo "✅ Server is responding correctly"
+      
+      - name: 📦 Install K6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+      
+      - name: 🧪 Run K6 Load Tests
+        id: k6-test
+        env:
+          API_URL: http://localhost:5000/api
+        run: |
+          START_TIME=$(date +%s)
+          
+          # Ejecutar K6 y capturar el resultado
+          k6 run --out json=k6-results.json k6/load-test.js > k6-output.txt 2>&1 || TEST_EXIT_CODE=$?
+          
+          # Mostrar la salida de K6
+          cat k6-output.txt
+          
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "exit_code=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+          
+          # Extraer métricas del resultado JSON
+          if [ -f k6-results.json ]; then
+            echo "📊 Extracting metrics from K6 results..."
+            
+            # Usar el último objeto del archivo JSON (el resumen final)
+            SUMMARY=$(tail -1 k6-results.json)
+            
+            VUS=$(echo $SUMMARY | jq -r '.metrics.vus.values.max // 0' 2>/dev/null || echo "0")
+            HTTP_REQS=$(echo $SUMMARY | jq -r '.metrics.http_reqs.values.count // 0' 2>/dev/null || echo "0")
+            HTTP_REQ_DURATION=$(echo $SUMMARY | jq -r '.metrics.http_req_duration.values.avg // 0' 2>/dev/null || echo "0")
+            HTTP_REQ_FAILED=$(echo $SUMMARY | jq -r '.metrics.http_req_failed.values.rate // 0' 2>/dev/null || echo "0")
+            
+            echo "vus=$VUS" >> $GITHUB_OUTPUT
+            echo "http_reqs=$HTTP_REQS" >> $GITHUB_OUTPUT
+            echo "http_req_duration=$HTTP_REQ_DURATION" >> $GITHUB_OUTPUT
+            echo "http_req_failed=$HTTP_REQ_FAILED" >> $GITHUB_OUTPUT
+            
+            echo "✅ Metrics extracted successfully"
+            echo "  - VUs: $VUS"
+            echo "  - Requests: $HTTP_REQS"
+            echo "  - Avg Duration: $HTTP_REQ_DURATION ms"
+            echo "  - Failed Rate: $HTTP_REQ_FAILED"
+          else
+            echo "⚠️  k6-results.json not found"
+          fi
+          
+          exit ${TEST_EXIT_CODE:-0}
+      
+      - name: 📊 Send K6 Logs to Grafana Loki
+        if: always()
+        run: |
+          TIMESTAMP=$(date +%s)000000000
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.k6-test.outputs.duration }}"
+          VUS="${{ steps.k6-test.outputs.vus }}"
+          HTTP_REQS="${{ steps.k6-test.outputs.http_reqs }}"
+          
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "streams": [{
+                "stream": {
+                  "job": "k6-load-tests",
+                  "workflow": "${{ github.workflow }}",
+                  "repository": "${{ github.repository }}",
+                  "branch": "${{ github.ref_name }}",
+                  "status": "'"$STATUS"'",
+                  "actor": "${{ github.actor }}"
+                },
+                "values": [
+                  ["'"$TIMESTAMP"'", "K6 Load Test completed: '"$STATUS"' | Duration: '"$DURATION"'s | VUs: '"$VUS"' | Requests: '"$HTTP_REQS"'"]
+                ]
+              }]
+            }'
+      
+      - name: 📊 Send K6 Metrics to Grafana Prometheus
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.k6-test.outputs.duration }}"
+          VUS="${{ steps.k6-test.outputs.vus }}"
+          HTTP_REQS="${{ steps.k6-test.outputs.http_reqs }}"
+          HTTP_REQ_DURATION="${{ steps.k6-test.outputs.http_req_duration }}"
+          HTTP_REQ_FAILED="${{ steps.k6-test.outputs.http_req_failed }}"
+          SUCCESS_VALUE=0
+          if [ "$STATUS" = "success" ]; then
+            SUCCESS_VALUE=1
+          fi
+          
+          cat <<EOF > /tmp/k6-metrics.txt
+          # TYPE k6_load_test_duration_seconds gauge
+          k6_load_test_duration_seconds{repository="${{ github.repository }}",branch="${{ github.ref_name }}",status="$STATUS"} $DURATION
+          # TYPE k6_load_test_success gauge
+          k6_load_test_success{repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $SUCCESS_VALUE
+          # TYPE k6_vus_max gauge
+          k6_vus_max{repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $VUS
+          # TYPE k6_http_reqs_total counter
+          k6_http_reqs_total{repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $HTTP_REQS
+          # TYPE k6_http_req_duration_avg gauge
+          k6_http_req_duration_avg{repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $HTTP_REQ_DURATION
+          # TYPE k6_http_req_failed_rate gauge
+          k6_http_req_failed_rate{repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $HTTP_REQ_FAILED
+          EOF
+          
+          curl -X POST "${{ secrets.GRAFANA_PROMETHEUS_URL }}" \
+            -u "${{ secrets.GRAFANA_PROMETHEUS_USER }}:${{ secrets.GRAFANA_PROMETHEUS_API_KEY }}" \
+            -H "Content-Type: text/plain" \
+            --data-binary @/tmp/k6-metrics.txt
+      
+      - name: 📤 Upload K6 Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: k6-results
+          path: |
+            k6-results.json
+            k6-output.txt
+      
+      - name: 🛑 Stop backend server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            SERVER_PID=$(cat server.pid)
+            echo "Stopping server with PID: $SERVER_PID"
+            kill $SERVER_PID || true
+            sleep 2
+          fi
