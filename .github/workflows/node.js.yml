@@ -95,7 +95,9 @@ jobs:
             --data-binary @/tmp/metrics.txt
       
       - name: 📊 Upload backend coverage
+        if: always()
         uses: codecov/codecov-action@v3
+        continue-on-error: true
         with:
           files: ./server/coverage/lcov.info
           flags: backend
@@ -184,7 +186,9 @@ jobs:
             --data-binary @/tmp/metrics.txt
       
       - name: 📊 Upload frontend coverage
+        if: always()
         uses: codecov/codecov-action@v3
+        continue-on-error: true
         with:
           files: ./client/coverage/lcov.info
           flags: frontend
@@ -369,7 +373,7 @@ jobs:
       
       - name: 📤 Upload K6 Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: k6-results
           path: |
