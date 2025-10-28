@@ -12,7 +12,7 @@ const PropertyDetail = () => {
     const loadProperty = async () => {
       try {
         setLoading(true);
-        const data = await propertyService.getPropertyById(id);
+        const data = await propertyService.getById(id);
         setProperty(data);
         setError('');
       } catch (err) {

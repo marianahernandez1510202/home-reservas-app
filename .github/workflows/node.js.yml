@@ -27,12 +27,71 @@ jobs:
         run: npm install 
       
       - name: 🧪 Run backend tests
+        id: backend-test
         working-directory: ./server
         env:
           NODE_ENV: test
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRE: ${{ secrets.JWT_EXPIRE }}
-        run: npm test
+        run: |
+          START_TIME=$(date +%s)
+          npm test || TEST_EXIT_CODE=$?
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "exit_code=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+          exit ${TEST_EXIT_CODE:-0}
+      
+      - name: 📊 Send Logs to Grafana Loki
+        if: always()
+        run: |
+          TIMESTAMP=$(date +%s)000000000
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.backend-test.outputs.duration }}"
+          
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "streams": [{
+                "stream": {
+                  "job": "backend-tests",
+                  "workflow": "${{ github.workflow }}",
+                  "repository": "${{ github.repository }}",
+                  "branch": "${{ github.ref_name }}",
+                  "status": "'"$STATUS"'",
+                  "actor": "${{ github.actor }}",
+                  "event": "${{ github.event_name }}"
+                },
+                "values": [
+                  ["'"$TIMESTAMP"'", "Backend tests completed with status: '"$STATUS"' in '"$DURATION"'s"]
+                ]
+              }]
+            }'
+      
+      - name: 📊 Send Metrics to Grafana Prometheus
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.backend-test.outputs.duration }}"
+          SUCCESS_VALUE=0
+          if [ "$STATUS" = "success" ]; then
+            SUCCESS_VALUE=1
+          fi
+          
+          cat <<EOF > /tmp/metrics.txt
+          # TYPE github_actions_test_duration_seconds gauge
+          github_actions_test_duration_seconds{job="backend",repository="${{ github.repository }}",branch="${{ github.ref_name }}",status="$STATUS"} $DURATION
+          # TYPE github_actions_test_success gauge
+          github_actions_test_success{job="backend",repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $SUCCESS_VALUE
+          # TYPE github_actions_test_total counter
+          github_actions_test_total{job="backend",repository="${{ github.repository }}",branch="${{ github.ref_name }}",status="$STATUS"} 1
+          EOF
+          
+          curl -X POST "${{ secrets.GRAFANA_PROMETHEUS_URL }}" \
+            -u "${{ secrets.GRAFANA_PROMETHEUS_USER }}:${{ secrets.GRAFANA_PROMETHEUS_API_KEY }}" \
+            -H "Content-Type: text/plain" \
+            --data-binary @/tmp/metrics.txt
       
       - name: 📊 Upload backend coverage
         uses: codecov/codecov-action@v3
@@ -61,8 +120,67 @@ jobs:
         run: npm install
       
       - name: 🧪 Run frontend tests
+        id: frontend-test
         working-directory: ./client
-        run: npm run test:ci
+        run: |
+          START_TIME=$(date +%s)
+          npm run test:ci || TEST_EXIT_CODE=$?
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "exit_code=${TEST_EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+          exit ${TEST_EXIT_CODE:-0}
+      
+      - name: 📊 Send Logs to Grafana Loki
+        if: always()
+        run: |
+          TIMESTAMP=$(date +%s)000000000
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.frontend-test.outputs.duration }}"
+          
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "streams": [{
+                "stream": {
+                  "job": "frontend-tests",
+                  "workflow": "${{ github.workflow }}",
+                  "repository": "${{ github.repository }}",
+                  "branch": "${{ github.ref_name }}",
+                  "status": "'"$STATUS"'",
+                  "actor": "${{ github.actor }}",
+                  "event": "${{ github.event_name }}"
+                },
+                "values": [
+                  ["'"$TIMESTAMP"'", "Frontend tests completed with status: '"$STATUS"' in '"$DURATION"'s"]
+                ]
+              }]
+            }'
+      
+      - name: 📊 Send Metrics to Grafana Prometheus
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.frontend-test.outputs.duration }}"
+          SUCCESS_VALUE=0
+          if [ "$STATUS" = "success" ]; then
+            SUCCESS_VALUE=1
+          fi
+          
+          cat <<EOF > /tmp/metrics.txt
+          # TYPE github_actions_test_duration_seconds gauge
+          github_actions_test_duration_seconds{job="frontend",repository="${{ github.repository }}",branch="${{ github.ref_name }}",status="$STATUS"} $DURATION
+          # TYPE github_actions_test_success gauge
+          github_actions_test_success{job="frontend",repository="${{ github.repository }}",branch="${{ github.ref_name }}"} $SUCCESS_VALUE
+          # TYPE github_actions_test_total counter
+          github_actions_test_total{job="frontend",repository="${{ github.repository }}",branch="${{ github.ref_name }}",status="$STATUS"} 1
+          EOF
+          
+          curl -X POST "${{ secrets.GRAFANA_PROMETHEUS_URL }}" \
+            -u "${{ secrets.GRAFANA_PROMETHEUS_USER }}:${{ secrets.GRAFANA_PROMETHEUS_API_KEY }}" \
+            -H "Content-Type: text/plain" \
+            --data-binary @/tmp/metrics.txt
       
       - name: 📊 Upload frontend coverage
         uses: codecov/codecov-action@v3
