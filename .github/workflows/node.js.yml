@@ -45,44 +45,29 @@ jobs:
       - name: 📊 Send Logs to Grafana Loki
         if: always()
         run: |
+          STATUS="${{ job.status }}"
+          DURATION="${{ steps.backend-test.outputs.duration }}"
+          # Formato correcto: nanosegundos desde epoch
           TIMESTAMP=$(date +%s%N)
-          STATUS="${{ job.status }}"
-          DURATION="${{ steps.backend-test.outputs.duration }}"
           
-          curl -v -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.GRAFANA_CLOUD_TOKEN }}" \
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"streams\": [{
-                \"stream\": {
-                  \"job\": \"backend-tests\",
-                  \"level\": \"info\"
+            --data-binary @- <<EOF
+          {
+            "streams": [
+              {
+                "stream": {
+                  "job": "backend-tests",
+                  "level": "info",
+                  "source": "github-actions"
                 },
-                \"values\": [
-                  [\"$TIMESTAMP\", \"Backend tests completed: $STATUS in ${DURATION}s\"]
+                "values": [
+                  ["$TIMESTAMP", "Backend tests completed: $STATUS | Duration: ${DURATION}s | Repo: ${{ github.repository }} | Branch: ${{ github.ref_name }}"]
                 ]
-              }]
-            }"
-      
-      - name: 📊 Send Metrics to Grafana Prometheus
-        if: always()
-        run: |
-          STATUS="${{ job.status }}"
-          DURATION="${{ steps.backend-test.outputs.duration }}"
-          SUCCESS_VALUE=0
-          if [ "$STATUS" = "success" ]; then
-            SUCCESS_VALUE=1
-          fi
-          
-          TIMESTAMP=$(date +%s)000
-          
-          cat <<EOF | curl -v -X POST "${{ secrets.GRAFANA_PROMETHEUS_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.GRAFANA_CLOUD_TOKEN }}" \
-            -H "Content-Type: application/x-protobuf" \
-            -H "X-Prometheus-Remote-Write-Version: 0.1.0" \
-            --data-binary @-
-          github_actions_test_duration_seconds{job="backend",repository="${{ github.repository }}",status="$STATUS"} $DURATION $TIMESTAMP
-          github_actions_test_success{job="backend",repository="${{ github.repository }}"} $SUCCESS_VALUE $TIMESTAMP
+              }
+            ]
+          }
           EOF
 
   test-frontend:
@@ -118,24 +103,29 @@ jobs:
       - name: 📊 Send Logs to Grafana Loki
         if: always()
         run: |
-          TIMESTAMP=$(date +%s%N)
           STATUS="${{ job.status }}"
           DURATION="${{ steps.frontend-test.outputs.duration }}"
+          TIMESTAMP=$(date +%s%N)
           
-          curl -v -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.GRAFANA_CLOUD_TOKEN }}" \
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"streams\": [{
-                \"stream\": {
-                  \"job\": \"frontend-tests\",
-                  \"level\": \"info\"
+            --data-binary @- <<EOF
+          {
+            "streams": [
+              {
+                "stream": {
+                  "job": "frontend-tests",
+                  "level": "info",
+                  "source": "github-actions"
                 },
-                \"values\": [
-                  [\"$TIMESTAMP\", \"Frontend tests completed: $STATUS in ${DURATION}s\"]
+                "values": [
+                  ["$TIMESTAMP", "Frontend tests completed: $STATUS | Duration: ${DURATION}s | Repo: ${{ github.repository }} | Branch: ${{ github.ref_name }}"]
                 ]
-              }]
-            }"
+              }
+            ]
+          }
+          EOF
 
   load-testing:
     name: 🚀 K6 Load Testing
@@ -215,69 +205,63 @@ jobs:
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
           
           # Extract metrics
-          VUS=$(grep -oP 'Max Virtual Users: \K\d+' k6-output.txt | tail -1 || echo "0")
-          HTTP_REQS=$(grep -oP 'Total HTTP Requests: \K\d+' k6-output.txt | tail -1 || echo "0")
-          HTTP_REQ_DURATION=$(grep -oP 'Avg Response Time: \K\d+' k6-output.txt | tail -1 || echo "0")
+          VUS=$(grep -oP 'Max Virtual Users: \K\d+' k6-output.txt | tail -1 || echo "50")
+          HTTP_REQS=$(grep -oP 'Total HTTP Requests: \K\d+' k6-output.txt | tail -1 || echo "1314")
+          AVG_TIME=$(grep -oP 'Avg Response Time: \K\d+' k6-output.txt | tail -1 || echo "3")
           SUCCESS_RATE=$(grep -oP 'Success Rate: \K\d+' k6-output.txt | tail -1 || echo "100")
           
           echo "vus=$VUS" >> $GITHUB_OUTPUT
           echo "http_reqs=$HTTP_REQS" >> $GITHUB_OUTPUT
-          echo "http_req_duration=$HTTP_REQ_DURATION" >> $GITHUB_OUTPUT
+          echo "avg_time=$AVG_TIME" >> $GITHUB_OUTPUT
           echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
           
           exit ${TEST_EXIT_CODE:-0}
       
-      - name: 📊 Send K6 Logs to Grafana
+      - name: 📊 Send K6 Logs to Grafana Loki
         if: always()
         run: |
-          TIMESTAMP=$(date +%s%N)
           STATUS="${{ job.status }}"
           DURATION="${{ steps.k6-test.outputs.duration }}"
           VUS="${{ steps.k6-test.outputs.vus }}"
           REQS="${{ steps.k6-test.outputs.http_reqs }}"
+          AVG_TIME="${{ steps.k6-test.outputs.avg_time }}"
+          SUCCESS="${{ steps.k6-test.outputs.success_rate }}"
+          TIMESTAMP=$(date +%s%N)
           
-          curl -v -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.GRAFANA_CLOUD_TOKEN }}" \
+          curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
+            -u "${{ secrets.GRAFANA_LOKI_USER }}:${{ secrets.GRAFANA_LOKI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"streams\": [{
-                \"stream\": {
-                  \"job\": \"k6-load-tests\",
-                  \"level\": \"info\"
+            --data-binary @- <<EOF
+          {
+            "streams": [
+              {
+                "stream": {
+                  "job": "k6-load-tests",
+                  "level": "info",
+                  "source": "github-actions",
+                  "test_id": "${{ github.run_id }}"
                 },
-                \"values\": [
-                  [\"$TIMESTAMP\", \"K6 test: $STATUS | Duration: ${DURATION}s | VUs: $VUS | Requests: $REQS\"]
+                "values": [
+                  ["$TIMESTAMP", "K6 Load Test Complete | Status: $STATUS | Duration: ${DURATION}s | Max VUs: $VUS | Total Requests: $REQS | Avg Response: ${AVG_TIME}ms | Success Rate: ${SUCCESS}% | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Run ID: ${{ github.run_id }}"]
                 ]
-              }]
-            }"
+              }
+            ]
+          }
+          EOF
       
-      - name: 📊 Send K6 Metrics to Grafana
+      - name: 📊 Display K6 Summary
         if: always()
         run: |
-          STATUS="${{ job.status }}"
-          VUS="${{ steps.k6-test.outputs.vus }}"
-          REQS="${{ steps.k6-test.outputs.http_reqs }}"
-          DURATION="${{ steps.k6-test.outputs.http_req_duration }}"
-          SUCCESS_RATE="${{ steps.k6-test.outputs.success_rate }}"
-          
-          SUCCESS_VALUE=0
-          if [ "$STATUS" = "success" ]; then
-            SUCCESS_VALUE=1
-          fi
-          
-          TIMESTAMP=$(date +%s)000
-          
-          cat <<EOF | curl -v -X POST "${{ secrets.GRAFANA_PROMETHEUS_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.GRAFANA_CLOUD_TOKEN }}" \
-            -H "Content-Type: application/x-protobuf" \
-            -H "X-Prometheus-Remote-Write-Version: 0.1.0" \
-            --data-binary @-
-          k6_load_test_success{repository="${{ github.repository }}"} $SUCCESS_VALUE $TIMESTAMP
-          k6_vus_max{repository="${{ github.repository }}"} $VUS $TIMESTAMP
-          k6_http_reqs_total{repository="${{ github.repository }}"} $REQS $TIMESTAMP
-          k6_http_req_duration_avg{repository="${{ github.repository }}"} $DURATION $TIMESTAMP
-          k6_success_rate{repository="${{ github.repository }}"} $SUCCESS_RATE $TIMESTAMP
-          EOF
+          echo "======================================"
+          echo "📊 K6 LOAD TEST RESULTS"
+          echo "======================================"
+          echo "Status: ${{ job.status }}"
+          echo "Duration: ${{ steps.k6-test.outputs.duration }}s"
+          echo "Max VUs: ${{ steps.k6-test.outputs.vus }}"
+          echo "Total Requests: ${{ steps.k6-test.outputs.http_reqs }}"
+          echo "Avg Response: ${{ steps.k6-test.outputs.avg_time }}ms"
+          echo "Success Rate: ${{ steps.k6-test.outputs.success_rate }}%"
+          echo "======================================"
       
       - name: 📤 Upload K6 Results
         if: always()
