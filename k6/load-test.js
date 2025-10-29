@@ -7,6 +7,15 @@ const errorRate = new Rate('errors');
 
 // Configuración de la prueba de carga
 export const options = {
+  // 👇 NUEVO: Configuración para K6 Cloud
+  ext: {
+    loadimpact: {
+      projectID: 5252933,  // Tu project ID de K6 Cloud
+      name: 'HOME App - CI/CD Load Test',
+      note: 'Load testing for HOME reservation app',
+    }
+  },
+  
   stages: [
     { duration: '20s', target: 10 },  // Ramp-up: 10 usuarios en 20s
     { duration: '40s', target: 30 },  // Carga media: 30 usuarios por 40s
@@ -14,10 +23,16 @@ export const options = {
     { duration: '20s', target: 20 },  // Reducción: vuelta a 20 usuarios
     { duration: '20s', target: 0 },   // Ramp-down: 0 usuarios
   ],
+  
   thresholds: {
     http_req_duration: ['p(95)<2000'], // 95% de requests deben ser < 2s
     http_req_failed: ['rate<0.05'],    // Menos del 5% de requests pueden fallar
-    // errors: ['rate<0.15'],          // Comentado para no bloquear el test
+  },
+  
+  // 👇 NUEVO: Tags para mejor organización en K6 Cloud
+  tags: {
+    environment: 'ci-cd',
+    app: 'home-reservas',
   },
 };
 
@@ -34,7 +49,10 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
-    tags: { name: 'GetAllProperties' },
+    tags: { 
+      name: 'GetAllProperties',
+      endpoint: '/properties',
+    },
   });
 
   // Verificaciones para el endpoint de propiedades
@@ -44,7 +62,6 @@ export default function () {
     'GET /properties - has valid response': (r) => {
       try {
         const body = JSON.parse(r.body);
-        // Verificar que la respuesta tenga un array de propiedades
         const properties = body.data || body;
         return Array.isArray(properties) && properties.length > 0;
       } catch (e) {
@@ -54,7 +71,6 @@ export default function () {
     },
   });
 
-  // Registrar errores si falló alguna verificación
   errorRate.add(!propertiesCheck);
 
   if (!propertiesCheck) {
@@ -63,7 +79,6 @@ export default function () {
     return;
   }
 
-  // Esperar entre 1 y 3 segundos (simular comportamiento real de usuario)
   sleep(Math.random() * 2 + 1);
 
   // ========================================
@@ -71,14 +86,12 @@ export default function () {
   // Simula usuarios viendo el detalle de una propiedad específica
   // ========================================
   
-  // Obtener un ID de propiedad de la respuesta anterior
   let propertyId = null;
   try {
     const propertiesData = JSON.parse(propertiesResponse.body);
     const properties = propertiesData.data || propertiesData;
     
     if (Array.isArray(properties) && properties.length > 0) {
-      // Seleccionar una propiedad aleatoria para simular navegación real
       const randomIndex = Math.floor(Math.random() * properties.length);
       propertyId = properties[randomIndex]._id || properties[randomIndex].id;
     }
@@ -86,23 +99,23 @@ export default function () {
     console.error('Error extracting property ID:', e);
   }
 
-  // Solo hacer la petición si tenemos un ID válido
   if (propertyId) {
     const propertyDetailResponse = http.get(`${BASE_URL}/properties/${propertyId}`, {
       headers: {
         'Content-Type': 'application/json',
       },
-      tags: { name: 'GetPropertyDetail' },
+      tags: { 
+        name: 'GetPropertyDetail',
+        endpoint: '/properties/:id',
+      },
     });
 
-    // Verificaciones para el endpoint de detalle de propiedad
     const detailCheck = check(propertyDetailResponse, {
       'GET /properties/:id - status is 200': (r) => r.status === 200,
       'GET /properties/:id - response time < 500ms': (r) => r.timings.duration < 500,
       'GET /properties/:id - has property data': (r) => {
         try {
           const body = JSON.parse(r.body);
-          // Verificar que la respuesta contenga datos de la propiedad
           const property = body.data || body;
           return property._id !== undefined || property.id !== undefined;
         } catch (e) {
@@ -118,7 +131,6 @@ export default function () {
       console.log(`⚠️ Property detail failed for ID: ${propertyId}`);
     }
 
-    // Simular que el usuario lee la información (1-2 segundos)
     sleep(Math.random() * 1 + 1);
   }
 
@@ -131,21 +143,20 @@ export default function () {
     headers: {
       'Content-Type': 'application/json',
     },
-    tags: { name: 'GetBookings' },
+    tags: { 
+      name: 'GetBookings',
+      endpoint: '/bookings',
+    },
   });
 
-  // Verificaciones para el endpoint de bookings
-  // Este endpoint puede requerir autenticación, así que aceptamos varios códigos
   check(bookingsResponse, {
     'GET /bookings - response received': (r) => r.status !== 0,
     'GET /bookings - response time < 1000ms': (r) => r.timings.duration < 1000,
     'GET /bookings - valid status code': (r) => {
-      // Aceptar 200 (OK), 401 (No autenticado), 403 (No autorizado)
       return r.status === 200 || r.status === 401 || r.status === 403;
     },
   });
 
-  // Pausa final antes de la siguiente iteración
   sleep(1);
 }
 
@@ -180,7 +191,6 @@ export function handleSummary(data) {
   console.log('\n' + '═'.repeat(45) + '\n');
   
   return {
-    'summary.json': JSON.stringify(data),
-    stdout: '', // Ya imprimimos nuestro resumen personalizado arriba
+    'stdout': '', // Ya imprimimos nuestro resumen personalizado arriba
   };
 }

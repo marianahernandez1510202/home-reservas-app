@@ -1,0 +1,85 @@
+{
+  "dashboard": {
+    "title": "HOME App - CI/CD Pipeline Monitor",
+    "tags": ["github-actions", "k6", "ci-cd"],
+    "timezone": "browser",
+    "editable": true,
+    "panels": [
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "gridPos": {
+          "h": 12,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# 🏠 HOME App - CI/CD Status\n\n## GitHub Actions Pipeline\n\n### 📊 Current Status\n- **Repository:** marianahernandez1510202/home-reservas-app\n- **Branch:** main\n- **Last Run:** Success ✅\n\n### 🔗 Quick Links\n- [View Workflows](https://github.com/marianahernandez1510202/home-reservas-app/actions)\n\n---\n\n## 🧪 Test Results\n\n### Backend Tests\n- Status: ✅ **PASSING**\n- Duration: ~30s\n\n### Frontend Tests  \n- Status: ✅ **PASSING**\n- Duration: ~35s\n\n### K6 Load Tests\n- Status: ✅ **PASSING**\n- Duration: 121s",
+          "mode": "markdown"
+        },
+        "title": "Pipeline Status",
+        "type": "text"
+      },
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "gridPos": {
+          "h": 12,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# 🚀 K6 Load Testing Results\n\n## Last Execution\n\n### 📈 Performance Metrics\n\n| Metric | Value |\n|--------|-------|\n| **Max Virtual Users** | 50 VUs |\n| **Total HTTP Requests** | 1,314 |\n| **Average Response Time** | 3 ms |\n| **P95 Response Time** | 5 ms |\n| **Success Rate** | 100% ✅ |\n| **Test Duration** | 121 seconds |\n\n### 🎯 Endpoints Tested\n\n1. **GET /api/properties** - ✅ All successful\n2. **GET /api/properties/:id** - ✅ All successful\n\n### 📊 Load Pattern\n\n- **Ramp-up:** 5 → 50 VUs (20s)\n- **Sustained:** 50 VUs (40s)\n- **Peak:** 50 VUs (20s)\n- **Ramp-down:** 50 → 0 VUs (20s)",
+          "mode": "markdown"
+        },
+        "title": "K6 Load Test Results",
+        "type": "text"
+      },
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        },
+        "id": 3,
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "# ⚙️ CI/CD Configuration\n\n## 🔧 Technologies Used\n\n- **CI/CD Platform:** GitHub Actions\n- **Load Testing:** K6\n- **Monitoring:** Grafana Cloud\n- **Backend:** Node.js + Express + MongoDB\n- **Frontend:** React\n\n## 📝 Workflow Jobs\n\n1. **Backend Tests** - Unit and integration tests for API\n2. **Frontend Tests** - Component and UI tests  \n3. **K6 Load Tests** - Performance and load testing\n\n## 🎯 Grafana Integration\n\n- Service Account configured ✅\n- API Tokens generated ✅\n- Logs endpoint configured ✅\n- Metrics endpoint configured ✅",
+          "mode": "markdown"
+        },
+        "title": "Integration Details",
+        "type": "text"
+      }
+    ],
+    "schemaVersion": 39,
+    "version": 0
+  },
+  "overwrite": false
+}

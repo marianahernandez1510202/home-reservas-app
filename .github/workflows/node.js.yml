@@ -47,7 +47,6 @@ jobs:
         run: |
           STATUS="${{ job.status }}"
           DURATION="${{ steps.backend-test.outputs.duration }}"
-          # Formato correcto: nanosegundos desde epoch
           TIMESTAMP=$(date +%s%N)
           
           curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
@@ -191,20 +190,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install k6
       
-      - name: 🧪 Run K6 Load Tests
+      - name: 🧪 Run K6 Load Tests with Cloud Output
         id: k6-test
         env:
           API_URL: http://localhost:5000/api
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}  # 👈 NUEVO
         run: |
           START_TIME=$(date +%s)
-          k6 run k6/load-test.js > k6-output.txt 2>&1 || TEST_EXIT_CODE=$?
+          # Ejecutar K6 con salida a Cloud y archivo local
+          k6 run --out cloud --out json=k6-results.json k6/load-test.js > k6-output.txt 2>&1 || TEST_EXIT_CODE=$?
           cat k6-output.txt
           
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
           
-          # Extract metrics
+          # Extract metrics from output
           VUS=$(grep -oP 'Max Virtual Users: \K\d+' k6-output.txt | tail -1 || echo "50")
           HTTP_REQS=$(grep -oP 'Total HTTP Requests: \K\d+' k6-output.txt | tail -1 || echo "1314")
           AVG_TIME=$(grep -oP 'Avg Response Time: \K\d+' k6-output.txt | tail -1 || echo "3")
@@ -214,6 +215,10 @@ jobs:
           echo "http_reqs=$HTTP_REQS" >> $GITHUB_OUTPUT
           echo "avg_time=$AVG_TIME" >> $GITHUB_OUTPUT
           echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
+          
+          # Extract K6 Cloud test URL if available
+          CLOUD_URL=$(grep -oP 'output: cloud \(https://[^\)]+\)' k6-output.txt | grep -oP 'https://[^\)]+' || echo "")
+          echo "cloud_url=$CLOUD_URL" >> $GITHUB_OUTPUT
           
           exit ${TEST_EXIT_CODE:-0}
       
@@ -226,6 +231,7 @@ jobs:
           REQS="${{ steps.k6-test.outputs.http_reqs }}"
           AVG_TIME="${{ steps.k6-test.outputs.avg_time }}"
           SUCCESS="${{ steps.k6-test.outputs.success_rate }}"
+          CLOUD_URL="${{ steps.k6-test.outputs.cloud_url }}"
           TIMESTAMP=$(date +%s%N)
           
           curl -X POST "${{ secrets.GRAFANA_LOKI_URL }}" \
@@ -242,7 +248,7 @@ jobs:
                   "test_id": "${{ github.run_id }}"
                 },
                 "values": [
-                  ["$TIMESTAMP", "K6 Load Test Complete | Status: $STATUS | Duration: ${DURATION}s | Max VUs: $VUS | Total Requests: $REQS | Avg Response: ${AVG_TIME}ms | Success Rate: ${SUCCESS}% | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Run ID: ${{ github.run_id }}"]
+                  ["$TIMESTAMP", "K6 Load Test Complete | Status: $STATUS | Duration: ${DURATION}s | Max VUs: $VUS | Total Requests: $REQS | Avg Response: ${AVG_TIME}ms | Success Rate: ${SUCCESS}% | Cloud URL: $CLOUD_URL | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Run ID: ${{ github.run_id }}"]
                 ]
               }
             ]
@@ -262,13 +268,53 @@ jobs:
           echo "Avg Response: ${{ steps.k6-test.outputs.avg_time }}ms"
           echo "Success Rate: ${{ steps.k6-test.outputs.success_rate }}%"
           echo "======================================"
+          if [ -n "${{ steps.k6-test.outputs.cloud_url }}" ]; then
+            echo "🔗 K6 Cloud Results: ${{ steps.k6-test.outputs.cloud_url }}"
+          fi
+          echo "======================================"
+      
+      - name: 💬 Comment PR with K6 Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const cloudUrl = '${{ steps.k6-test.outputs.cloud_url }}';
+            const vus = '${{ steps.k6-test.outputs.vus }}';
+            const reqs = '${{ steps.k6-test.outputs.http_reqs }}';
+            const avgTime = '${{ steps.k6-test.outputs.avg_time }}';
+            const successRate = '${{ steps.k6-test.outputs.success_rate }}';
+            
+            const statusEmoji = status === 'success' ? '✅' : '❌';
+            
+            let comment = `## ${statusEmoji} K6 Load Test Results\n\n`;
+            comment += `| Metric | Value |\n`;
+            comment += `|--------|-------|\n`;
+            comment += `| Status | ${status} |\n`;
+            comment += `| Max VUs | ${vus} |\n`;
+            comment += `| Total Requests | ${reqs} |\n`;
+            comment += `| Avg Response Time | ${avgTime}ms |\n`;
+            comment += `| Success Rate | ${successRate}% |\n`;
+            
+            if (cloudUrl) {
+              comment += `\n🔗 [View detailed results in K6 Cloud](${cloudUrl})`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
       
       - name: 📤 Upload K6 Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: k6-results
-          path: k6-output.txt
+          path: |
+            k6-output.txt
+            k6-results.json
       
       - name: 🛑 Stop server
         if: always()
