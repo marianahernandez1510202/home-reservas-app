@@ -7,7 +7,7 @@ const errorRate = new Rate('errors');
 
 // Configuración de la prueba de carga
 export const options = {
-  // 👇 NUEVO: Configuración para K6 Cloud
+  //  Configuración para K6 Cloud
   ext: {
     loadimpact: {
       projectID: 5252933,  // Tu project ID de K6 Cloud
@@ -29,7 +29,7 @@ export const options = {
     http_req_failed: ['rate<0.05'],    // Menos del 5% de requests pueden fallar
   },
   
-  // 👇 NUEVO: Tags para mejor organización en K6 Cloud
+  //  Tags para mejor organización en K6 Cloud
   tags: {
     environment: 'ci-cd',
     app: 'home-reservas',
@@ -40,11 +40,7 @@ export const options = {
 const BASE_URL = __ENV.API_URL || 'http://localhost:5000/api';
 
 export default function () {
-  // ========================================
-  // PRUEBA 1: GET /api/properties
-  // Simula usuarios navegando por las propiedades disponibles
-  // ========================================
-  
+
   const propertiesResponse = http.get(`${BASE_URL}/properties`, {
     headers: {
       'Content-Type': 'application/json',
@@ -80,11 +76,6 @@ export default function () {
   }
 
   sleep(Math.random() * 2 + 1);
-
-  // ========================================
-  // PRUEBA 2: GET /api/properties/:id
-  // Simula usuarios viendo el detalle de una propiedad específica
-  // ========================================
   
   let propertyId = null;
   try {
@@ -134,10 +125,6 @@ export default function () {
     sleep(Math.random() * 1 + 1);
   }
 
-  // ========================================
-  // PRUEBA 3: GET /api/bookings
-  // Simula usuarios consultando reservas
-  // ========================================
   
   const bookingsResponse = http.get(`${BASE_URL}/bookings`, {
     headers: {

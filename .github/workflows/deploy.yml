@@ -1,0 +1,116 @@
+name: 🚀 Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["🐳 Build and Push Docker Images"]
+    types:
+      - completed
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Copy docker-compose.yml to VPS
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.yml"
+          target: "/opt/myapp/"
+
+      - name: 📦 Copy .env.production to VPS
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: ".env.production"
+          target: "/opt/myapp/"
+
+      - name: 🚀 Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /opt/myapp
+            
+            echo "🔐 Logging into GitHub Container Registry..."
+            echo ${{ secrets.SECRET }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            echo "📝 Setting up environment variables..."
+            # Reemplazar GITHUB_REPOSITORY en docker-compose.yml
+            export GITHUB_REPOSITORY=${{ github.repository }}
+            
+            # Cargar variables de .env.production
+            if [ -f .env.production ]; then
+              export $(cat .env.production | grep -v '^#' | xargs)
+            fi
+            
+            echo "⬇️ Pulling latest images..."
+            docker compose pull
+            
+            echo "🛑 Stopping old containers..."
+            docker compose down
+            
+            echo "🚀 Starting new containers..."
+            docker compose up -d
+            
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 10
+            
+            echo "🔍 Checking container status..."
+            docker compose ps
+            
+            echo "📊 Showing recent logs..."
+            docker compose logs --tail=50
+            
+            echo "🧹 Cleaning up old images..."
+            docker image prune -af
+            
+            echo "✅ Deployment completed successfully!"
+
+      - name: 🔍 Verify Deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /opt/myapp
+            echo "======================================"
+            echo "📊 DEPLOYMENT STATUS"
+            echo "======================================"
+            docker compose ps
+            echo "======================================"
+            echo "🔍 HEALTH CHECKS"
+            echo "======================================"
+            # Check backend health
+            curl -f http://localhost:5000/api/health || echo "⚠️ Backend health check failed"
+            # Check frontend
+            curl -f http://localhost/ || echo "⚠️ Frontend health check failed"
+            echo "======================================"
+
+      - name: 💬 Deployment Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            echo "✅ Deployment to VPS completed successfully!"
+          else
+            echo "❌ Deployment to VPS failed!"
+          fi

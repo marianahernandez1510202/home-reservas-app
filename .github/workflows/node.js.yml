@@ -194,7 +194,7 @@ jobs:
         id: k6-test
         env:
           API_URL: http://localhost:5000/api
-          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}  # 👈 NUEVO
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}  
         run: |
           START_TIME=$(date +%s)
           # Ejecutar K6 con salida a Cloud y archivo local
