@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e
+
+echo "============================================"
+echo "🟢 GREEN DEPLOYMENT - INICIANDO"
+echo "============================================"
+
+# Variables
+VERSION=${1:-"1.0.0"}
+COMPOSE_FILE="docker-compose-blue-green.yml"
+CONTAINER_NAME="app-green"
+
+echo ""
+echo "📋 Configuración:"
+echo "   - Versión: $VERSION"
+echo "   - Contenedor: $CONTAINER_NAME"
+echo "   - Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+echo ""
+
+# Exportar versión para docker-compose
+export VERSION=$VERSION
+export DEPLOY_ENV=green
+
+# Verificar si el contenedor ya existe
+if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "⚠️  El contenedor $CONTAINER_NAME ya existe. Deteniéndolo..."
+    docker stop $CONTAINER_NAME || true
+    docker rm $CONTAINER_NAME || true
+fi
+
+# Construir imagen
+echo ""
+echo "🔨 Construyendo imagen Docker..."
+docker-compose -f $COMPOSE_FILE build app-green
+
+# Desplegar contenedor Green
+echo ""
+echo "🚀 Desplegando contenedor Green..."
+docker-compose -f $COMPOSE_FILE up -d app-green
+
+# Esperar a que el servicio esté listo
+echo ""
+echo "⏳ Esperando a que el servicio Green esté listo..."
+sleep 10
+
+# Health check
+echo ""
+echo "🏥 Ejecutando health check..."
+if bash scripts/health-check.sh $CONTAINER_NAME 5000; then
+    echo ""
+    echo "============================================"
+    echo "✅ DESPLIEGUE GREEN COMPLETADO CON ÉXITO"
+    echo "============================================"
+    echo ""
+    echo "📝 Próximos pasos:"
+    echo "   1. Verificar el servicio manualmente"
+    echo "   2. Ejecutar: bash scripts/switch.sh green"
+    echo "   3. Para activar en producción"
+    echo ""
+    exit 0
+else
+    echo ""
+    echo "============================================"
+    echo "❌ ERROR EN EL DESPLIEGUE GREEN"
+    echo "============================================"
+    echo ""
+    echo "El contenedor no pasó el health check."
+    echo "Revisa los logs con: docker logs $CONTAINER_NAME"
+    echo ""
+    exit 1
+fi

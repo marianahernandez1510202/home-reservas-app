@@ -1,0 +1,107 @@
+services:
+  # ==========================================
+  # BACKEND BLUE ENVIRONMENT
+  # ==========================================
+  app-blue:
+    image: ghcr.io/${GITHUB_REPOSITORY}/home-backend:${VERSION:-latest}
+    container_name: app-blue
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE}
+      - FRONTEND_URL=http://nginx-lb
+      - DEPLOY_ENV=blue
+      - VERSION=${VERSION:-1.0.0}
+    networks:
+      - blue-green-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "environment=blue"
+      - "version=${VERSION:-1.0.0}"
+
+  # ==========================================
+  # BACKEND GREEN ENVIRONMENT
+  # ==========================================
+  app-green:
+    image: ghcr.io/${GITHUB_REPOSITORY}/home-backend:${VERSION:-latest}
+    container_name: app-green
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE}
+      - FRONTEND_URL=http://nginx-lb
+      - DEPLOY_ENV=green
+      - VERSION=${VERSION:-1.0.0}
+    networks:
+      - blue-green-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "environment=green"
+      - "version=${VERSION:-1.0.0}"
+
+  # ==========================================
+  # NGINX LOAD BALANCER
+  # ==========================================
+  nginx-lb:
+    image: nginx:alpine
+    container_name: nginx-lb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-blue-green.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - blue-green-network
+    depends_on:
+      - app-blue
+      - app-green
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "service=load-balancer"
+
+  # ==========================================
+  # FRONTEND (Optional - puede ser servido por Nginx)
+  # ==========================================
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/home-frontend:${VERSION:-latest}
+    container_name: home-frontend
+    restart: unless-stopped
+    networks:
+      - blue-green-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "service=frontend"
+      - "version=${VERSION:-1.0.0}"
+
+networks:
+  blue-green-network:
+    driver: bridge
+    name: blue-green-network
