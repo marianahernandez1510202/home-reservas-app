@@ -18,6 +18,14 @@ echo "   - Contenedor: $CONTAINER_NAME"
 echo "   - Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
+# Cargar variables de entorno desde .env.production
+if [ -f .env.production ]; then
+    echo "📦 Cargando variables de entorno..."
+    set -o allexport
+    source .env.production
+    set +o allexport
+fi
+
 # Exportar versión para docker-compose
 export VERSION=$VERSION
 export DEPLOY_ENV=green
@@ -29,15 +37,15 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     docker rm $CONTAINER_NAME || true
 fi
 
-# Construir imagen
+# Pull de imágenes más recientes
 echo ""
-echo "🔨 Construyendo imagen Docker..."
-docker-compose -f $COMPOSE_FILE build app-green
+echo "⬇️ Descargando imágenes más recientes..."
+docker compose -f $COMPOSE_FILE pull app-green || echo "Pull falló, continuando..."
 
 # Desplegar contenedor Green
 echo ""
 echo "🚀 Desplegando contenedor Green..."
-docker-compose -f $COMPOSE_FILE up -d app-green
+docker compose -f $COMPOSE_FILE up -d app-green --force-recreate
 
 # Esperar a que el servicio esté listo
 echo ""

@@ -18,25 +18,27 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 📦 Copy docker-compose.yml to VPS
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          source: "docker-compose.yml"
-          target: "~/app/"
+      - name: 📦 Prepare files for deployment
+        run: |
+          # Save SSH key to file
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
 
-      - name: 📦 Copy .env.production to VPS
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          source: ".env.production"
-          target: "~/app/"
+          # Copy docker-compose.yml via SSH with cat
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            docker-compose.yml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/app/
+
+          # Create .env.production on VPS
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "cat > ~/app/.env.production" << EOF
+          MONGODB_URI=${{ secrets.MONGODB_URI }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRE=${{ secrets.JWT_EXPIRE }}
+          EOF
+
+          echo "✅ Files prepared successfully"
 
       - name: 🚀 Deploy to VPS
         uses: appleboy/ssh-action@master
@@ -65,11 +67,14 @@ jobs:
             echo "⬇️ Pulling latest images..."
             docker compose pull
 
-            echo "🛑 Stopping old containers..."
-            docker compose down
+            echo "🛑 Stopping and removing old containers..."
+            docker compose down --remove-orphans
+
+            # Force remove any conflicting containers
+            docker rm -f home-backend home-frontend 2>/dev/null || true
 
             echo "🚀 Starting new containers..."
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             echo "⏳ Waiting for services to be healthy..."
             sleep 10
@@ -104,7 +109,7 @@ jobs:
             # Check backend health
             curl -f http://localhost:5000/ || echo "⚠️ Backend health check failed"
             # Check frontend
-            curl -f http://localhost/ || echo "⚠️ Frontend health check failed"
+            curl -f http://localhost:3000/ || echo "⚠️ Frontend health check failed"
             echo "======================================"
 
       - name: 💬 Deployment Notification
