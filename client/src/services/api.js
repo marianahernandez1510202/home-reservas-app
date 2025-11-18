@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// En producción, usar el proxy de Nginx (ruta relativa /api)
+// En desarrollo, usar localhost
+const API_URL = process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api');
 
 // Crear instancia de axios
 const api = axios.create({
