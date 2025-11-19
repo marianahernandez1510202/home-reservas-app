@@ -7,7 +7,7 @@ const Home = () => {
     <div className="home">
       <header className="home-header">
         <h1>🏠 HOME</h1>
-        <p>Encuentra el hospedaje perfecto para tu próxima aventura</p>
+        <p>Es un cambio pal profea</p>
       </header>
 
       <main className="home-main">
