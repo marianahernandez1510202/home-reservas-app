@@ -20,6 +20,8 @@
 8. [Verificación de Contenedores](#8-verificación-de-contenedores)
 9. [Aplicación Funcionando en Navegador](#9-aplicación-funcionando-en-navegador)
 10. [Configuraciones del Proyecto](#10-configuraciones-del-proyecto)
+11. [Observabilidad - Prometheus + Grafana](#11-observabilidad---prometheus--grafana)
+12. [Pruebas de Integración con Supertest](#12-pruebas-de-integración-con-supertest)
 
 ---
 
@@ -554,6 +556,189 @@ ls -la scripts/
 
 ---
 
+## 11. Observabilidad - Prometheus + Grafana
+
+### 📝 Descripción
+
+Stack de monitoreo para el Nivel Autónomo (Avanzado):
+- **Prometheus:** Recolección de métricas (puerto 9090)
+- **Grafana:** Visualización con dashboards (puerto 3001)
+- **cAdvisor:** Métricas de contenedores Docker (puerto 8081)
+- **Node Exporter:** Métricas del sistema (puerto 9100)
+
+### 📝 Comandos Ejecutados
+
+```bash
+# Iniciar stack de monitoreo
+cd ~/blue-green-app
+bash scripts/start-monitoring.sh
+
+# Verificar contenedores de monitoreo
+docker ps | grep -E "prometheus|grafana|cadvisor|node-exporter"
+
+# Acceder a las interfaces
+# Prometheus: http://155.138.198.81:9090
+# Grafana: http://155.138.198.81:3001 (admin/admin123)
+# cAdvisor: http://155.138.198.81:8081
+```
+
+### 📸 Evidencia 25: Prometheus - Métricas de CPU
+
+**Captura de pantalla mostrando:**
+- URL: http://155.138.198.81:9090
+- Query: `rate(container_cpu_usage_seconds_total[5m])`
+- Resultados de métricas de contenedores
+
+```
+[INSERTAR CAPTURA: 25-prometheus-cpu.png]
+```
+
+**Descripción:** Prometheus recolectando métricas de CPU de contenedores.
+
+---
+
+### 📸 Evidencia 26: Prometheus - Métricas de Memoria
+
+**Captura de pantalla mostrando:**
+- URL: http://155.138.198.81:9090
+- Query: `container_memory_usage_bytes`
+- Resultados mostrando uso de memoria
+
+```
+[INSERTAR CAPTURA: 26-prometheus-memory.png]
+```
+
+**Descripción:** Prometheus recolectando métricas de memoria.
+
+---
+
+### 📸 Evidencia 27: Grafana - Login
+
+**Captura de pantalla mostrando:**
+- URL: http://155.138.198.81:3001
+- Pantalla de login de Grafana
+- Credenciales: admin / admin123
+
+```
+[INSERTAR CAPTURA: 27-grafana-login.png]
+```
+
+**Descripción:** Interfaz de login de Grafana.
+
+---
+
+### 📸 Evidencia 28: Grafana - Dashboard CPU
+
+**Captura de pantalla mostrando:**
+- Dashboard "Docker Monitoring"
+- Gráfico de CPU Usage con datos reales
+- Query: `rate(container_cpu_usage_seconds_total[5m])`
+
+```
+[INSERTAR CAPTURA: 28-grafana-cpu-dashboard.png]
+```
+
+**Descripción:** Dashboard de Grafana mostrando uso de CPU.
+
+---
+
+### 📸 Evidencia 29: Grafana - Dashboard Memoria
+
+**Captura de pantalla mostrando:**
+- Panel de Memory Usage
+- Datos de memoria por contenedor
+- Unidades en bytes
+
+```
+[INSERTAR CAPTURA: 29-grafana-memory-dashboard.png]
+```
+
+**Descripción:** Dashboard de Grafana mostrando uso de memoria.
+
+---
+
+### 📸 Evidencia 30: cAdvisor - Interfaz
+
+**Captura de pantalla mostrando:**
+- URL: http://155.138.198.81:8081
+- Lista de contenedores monitoreados
+- Métricas en tiempo real
+
+```
+[INSERTAR CAPTURA: 30-cadvisor-interface.png]
+```
+
+**Descripción:** Interfaz de cAdvisor mostrando contenedores.
+
+---
+
+### 📸 Evidencia 31: Contenedores de Monitoreo
+
+**Captura de pantalla mostrando:**
+- Comando: `docker ps | grep -E "prometheus|grafana|cadvisor|node-exporter"`
+- Contenedores: prometheus, grafana, cadvisor, node-exporter
+- Estado "Up" y "healthy"
+
+```
+[INSERTAR CAPTURA: 31-monitoring-containers.png]
+```
+
+**Descripción:** Todos los contenedores de monitoreo corriendo.
+
+---
+
+## 12. Pruebas de Integración con Supertest
+
+### 📝 Descripción
+
+Suite de pruebas de integración para validar los endpoints de la API usando Supertest y Jest.
+
+### 📝 Comandos Ejecutados
+
+```bash
+# Ejecutar pruebas
+cd server
+npm test
+
+# Ver archivo de pruebas
+cat tests/auth.test.js
+```
+
+### 📸 Evidencia 32: Ejecución de Tests
+
+**Captura de pantalla mostrando:**
+- Comando: `npm test`
+- 5 tests ejecutados:
+  - CP-001: Registro exitoso
+  - CP-002: Email duplicado
+  - CP-003: Login válido
+  - CP-004: Login inválido
+  - CP-005: Usuario autenticado
+- Todos los tests pasando (verde)
+
+```
+[INSERTAR CAPTURA: 32-tests-passing.png]
+```
+
+**Descripción:** Suite de pruebas de integración ejecutándose exitosamente.
+
+---
+
+### 📸 Evidencia 33: Código de Tests
+
+**Captura de pantalla mostrando:**
+- Contenido del archivo `server/tests/auth.test.js`
+- Uso de Supertest para llamadas HTTP
+- Assertions con Jest
+
+```
+[INSERTAR CAPTURA: 33-test-code.png]
+```
+
+**Descripción:** Código fuente de las pruebas de integración.
+
+---
+
 ## 📊 Tabla Resumen de Evidencias
 
 | # | Evidencia | Archivo | Descripción |
@@ -582,11 +767,27 @@ ls -la scripts/
 | 22 | Scripts List | `22-scripts-list.png` | Lista de scripts |
 | 23 | Script Content | `23-script-content.png` | Código de scripts |
 | 24 | GitHub Secrets | `24-github-secrets.png` | Secrets configurados |
+| 25 | Prometheus CPU | `25-prometheus-cpu.png` | Métricas de CPU en Prometheus |
+| 26 | Prometheus Memory | `26-prometheus-memory.png` | Métricas de memoria en Prometheus |
+| 27 | Grafana Login | `27-grafana-login.png` | Interfaz de login de Grafana |
+| 28 | Grafana CPU Dashboard | `28-grafana-cpu-dashboard.png` | Dashboard de CPU en Grafana |
+| 29 | Grafana Memory Dashboard | `29-grafana-memory-dashboard.png` | Dashboard de memoria en Grafana |
+| 30 | cAdvisor Interface | `30-cadvisor-interface.png` | Interfaz de cAdvisor |
+| 31 | Monitoring Containers | `31-monitoring-containers.png` | Contenedores de monitoreo |
+| 32 | Tests Passing | `32-tests-passing.png` | Tests de integración pasando |
+| 33 | Test Code | `33-test-code.png` | Código de pruebas Supertest |
 
 ---
 
 ## ✅ Checklist de Evidencias Recolectadas
 
+### Nivel Satisfactorio (Base)
+- [ ] 32 - Tests Passing (Supertest - 5 tests)
+- [ ] 33 - Test Code
+- [ ] 14 - Docker PS (Contenedores)
+- [ ] 20 - Nginx Config (Proxy Inverso)
+
+### Nivel Destacado (Intermedio)
 - [ ] 01 - Setup VPS
 - [ ] 02 - Deploy Blue Inicio
 - [ ] 03 - Deploy Blue Exitoso
@@ -597,16 +798,25 @@ ls -la scripts/
 - [ ] 08 - Switch Green
 - [ ] 09 - Active Conf Green
 - [ ] 10 - Rollback Blue
+
+### Nivel Autónomo (Avanzado)
+- [ ] 25 - Prometheus CPU
+- [ ] 26 - Prometheus Memory
+- [ ] 27 - Grafana Login
+- [ ] 28 - Grafana CPU Dashboard
+- [ ] 29 - Grafana Memory Dashboard
+- [ ] 30 - cAdvisor Interface
+- [ ] 31 - Monitoring Containers
+
+### CI/CD y Configuraciones
 - [ ] 11 - GitHub Actions List
 - [ ] 12 - GitHub Actions Detail
 - [ ] 13 - GitHub Actions Logs
-- [ ] 14 - Docker PS
 - [ ] 15 - Container Logs
 - [ ] 16 - Docker Stats
 - [ ] 17 - Backend Browser
 - [ ] 18 - Frontend Browser
 - [ ] 19 - Curl Backend
-- [ ] 20 - Nginx Config
 - [ ] 21 - Docker Compose
 - [ ] 22 - Scripts List
 - [ ] 23 - Script Content
@@ -615,6 +825,27 @@ ls -la scripts/
 ---
 
 ## 📝 Conclusiones
+
+### Niveles de la Rúbrica Cumplidos
+
+#### ✅ Nivel Satisfactorio (Base) - CUMPLIDO
+- **Pruebas de Integración (Supertest):** 5 tests implementados (más de los 3 requeridos)
+- **Contenerización (Docker):** Dockerfiles para frontend y backend con Container Registry (GHCR)
+- **Nginx como Proxy Inverso:** Configuración completa para gestionar peticiones
+
+#### ✅ Nivel Destacado (Intermedio) - CUMPLIDO
+- **Blue-Green Deployment:** Dos ambientes corriendo simultáneamente
+- **Switch Automatizado:** Cambio de tráfico sin downtime
+- **Rollback Instantáneo:** Vuelta a versión anterior en ~2 segundos
+
+#### ✅ Nivel Autónomo (Avanzado) - CUMPLIDO
+- **Prometheus:** Servidor de recolección de métricas (puerto 9090)
+- **Grafana:** Dashboard de visualización conectado a Prometheus (puerto 3001)
+- **Métricas Monitoreadas:**
+  - Uso de CPU por contenedor
+  - Uso de memoria por contenedor
+  - Estado de contenedores (UP/DOWN)
+  - Tráfico de red
 
 ### Objetivos Cumplidos
 
@@ -634,7 +865,8 @@ ls -la scripts/
 - `deploy-green.sh` - Despliegue automático de Green
 - `switch.sh` - Cambio entre ambientes
 - `health-check.sh` - Verificación de salud
-- `setup-vps.sh` - Configuración inicial del VPS
+- `start-monitoring.sh` - Iniciar stack de monitoreo
+- `stop-monitoring.sh` - Detener stack de monitoreo
 
 ✅ **Nginx como Load Balancer**
 - Configuración dinámica
@@ -645,6 +877,12 @@ ls -la scripts/
 - Frontend y Backend en contenedores
 - Docker Compose para orquestación
 - Redes aisladas para seguridad
+
+✅ **Observabilidad con Prometheus + Grafana**
+- Prometheus recolectando métricas de contenedores
+- Grafana con dashboard personalizado
+- cAdvisor para métricas de Docker
+- Node Exporter para métricas del sistema
 
 ### Métricas Obtenidas
 
@@ -671,8 +909,11 @@ ls -la scripts/
 
 - **Repositorio GitHub:** https://github.com/marianahernandez1510202/home-reservas-app
 - **Backend Blue-Green:** http://155.138.198.81:8080/
-- **Frontend:** http://155.138.198.81/
+- **Frontend:** http://155.138.198.81:3000/
 - **GitHub Actions:** https://github.com/marianahernandez1510202/home-reservas-app/actions
+- **Prometheus:** http://155.138.198.81:9090/
+- **Grafana:** http://155.138.198.81:3001/ (admin/admin123)
+- **cAdvisor:** http://155.138.198.81:8081/
 
 ---
 
